@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Mar 20 15:30:11 2018
+
+@author: Alioune
+
+"""
+
+from pandas import *
+from numpy import *
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.ensemble import RandomForestClassifier
+import os
+os.chdir("/home/formationsid/Documents/Data_Mining")
+import nltk, csv
+from nltk.corpus import stopwords
+from sklearn import preprocessing
+from collections import defaultdict
+#%%
+# Importation des donnees avec la methode read_csv de pandas
+training_info_sid=read_csv('training_info_sid.csv', header=0,delimiter=',', quotechar='"')
+training_set_sid=read_csv('training_set_sid.csv', header=0,delimiter=',', quotechar='"')
+test_info_sid=read_csv('test_info_sid.csv', header=0,delimiter=',', quotechar='"')
+test_set_sid=read_csv('test_set_sid.csv', header=0,delimiter=',', quotechar='"')
+"""
+     Remplacement des "nan" avec le mot "vide" (pour pouvoir les regrouper dans la suite) 
+     puisque la methode ne supporter pas les "nan"
+     Remarque :
+         Les destinataires vides sont remplacés par Hillary Clinton (qui est le mode() des destinataires)
+         training_info_sid['desti'].mode()
+"""
+training_info_sid['content'].fillna('vide', inplace=True)
+training_info_sid['desti'].fillna('hillary.clinton@univ-tlse3.fr', inplace=True)
+#training_set_sid.fillna('vide', inplace=True)
+test_info_sid['content'].fillna('vide', inplace=True)
+#test_set_sid.fillna('vide', inplace=True)
+#%%
+# Replication de l'identifiant des emails dans training_set_sid afin d'obtenir une liste de l'ensemble des emails
+s=training_set_sid['id'].str.split(' ').apply(Series,1).stack()
+s.index = s.index.droplevel(-1)
+s.name='id'
+del training_set_sid['id']
+donsid=training_set_sid.join(s)
+#%%
+# Replication des destinataires des emails dans test_info_sid afin d'obtenir une liste de l'ensemble des destinataires
+s=training_info_sid['desti'].str.split(' ').apply(Series,1).stack()
+s.index = s.index.droplevel(-1)
+s.name='desti'
+del training_info_sid['desti']
+doninfo=training_info_sid.join(s)
+#%%
+# Conversion des identifiants des emails de chaine de caracteres vers entier
+donsid['id']=[int(i) for i in donsid['id']]
+
+# joincture de doninfo et donsid
+dontrain=merge(doninfo,donsid, how='left', on=['id'])
+
+#%%
+# Replication de l'identifiant des emails dans test_set_sid
+s=test_set_sid['id'].str.split(' ').apply(Series,1).stack()
+s.index = s.index.droplevel(-1)
+s.name='id'
+del test_set_sid['id']
+dontestsid=test_set_sid.join(s)
+
+#%%
+# Concatenation et replication de training
+dontestsid['id']=[int(i) for i in dontestsid['id']]
+
+# joincture de test_info_sid et dontestsid
+dontest=merge(test_info_sid,dontestsid, how='left', on=['id'])
+#%%
+# Concaténation de dontrain et dontest : Ainsi dans don on a toutes les infos contenues dans les fichiers importées au debut
+don=concat([dontrain,dontest],axis=0)
+#%%
+# Implémentation de la fonction sent2clean (cf : cours J Moreno) pour nettoyer le contenu des articles
+def sent2clean(sent):
+    sent=sent.lower()
+    sent="".join([X if X.isalpha() else "  " for X in sent])
+    sent=" ".join(sent.split())
+    return sent
+# Nettoyage du contenu de l'ensemble des emails
+content_clean=[sent2clean(str(text)) for text in (don['content'])]
+
+#%%
+# Implémentation de la fonction sentenses2matrix (cf : cours J Moreno) pour binariser sents en fonction de la liste de mots vocab
+def sentenses2matrix(sents,vocab):
+    tf = zeros((len(sents), len(vocab)))
+    for i,s in enumerate(sents):
+        for w in s.split():
+            if w in vocab:
+                tf[i][vocab[w]]+=1
+    return tf
+
+# Implémentation de la fonction sentenses2vocabs (cf : cours J Moreno)  pour selectionner la liste de mots vocabs
+def sentenses2vocabs(sents,th=0):
+    fullcount=defaultdict(int)
+    for x in sents:
+        for w in x.split():
+            fullcount[w]+=1
+    vocabset = set(key for key, value in fullcount.items() if value >= th)
+    ivocab=[]
+    vocab={}
+    for i,x in enumerate(vocabset):
+        vocab[x]=i
+        ivocab.append(x)
+    return vocab
+
+# Concatenation des expéditeurs dans une une chaine de carateres
+textexp=''
+for exp in don['exped']:
+    textexp=textexp+' '+str(exp)
+
+textexpdistinct=sentenses2vocabs(textexp.split(),0)
+binarexp=sentenses2matrix(textexp.split(),textexpdistinct)
+#%%
+# Remplacement des expéditeurs manquants par le mot "vide"
+#mode_desti=don['desti'].mode()
+#mode_desti=hillary.clinton@univ-tlse3.fr
+#don['desti'].fillna('hillary.clinton@univ-tlse3.fr', inplace=True)
+# Concatenation des destinataires dans une une chaine de carateres
+textdesti=''
+for desti in don['desti']:
+    textdesti=textdesti+' '+str(desti)
+
+textdestidistinct=sentenses2vocabs(textdesti.split(),0)
+binardesti=sentenses2matrix(textdesti.split(),textdestidistinct)
+
+#%%
+# lg : liste contenant la longueur des emails (nombre de mùots contenus dans emails envoyés)
+lg=[]
+for mes in don['content']:
+        lg.append(len(mes.split()))
+#%%
+"""
+        Remplacement des dates manquantes par le mode() des dates
+        mod=don['date'].mode()
+        mod = 2009-09-20T04:00:00+00:00
+"""
+don['date'].fillna('2009-09-20T04:00:00+00:00', inplace=True)
+
+d=[]
+m=[]
+y=[]
+Trim=[]
+for dat in don['date']:
+        y.append(int(str(dat)[0:4]))
+        m.append(int(str(dat)[5:7]))
+        d.append(int(str(dat)[8:10]))
+        Trim.append(int(str(dat)[11:13]))
+#%%
+# Supprimer de la colonne date dans don
+del don['date']
+#%%
+# Reconstruction de la date sous le format escompté en rajoutant la longueur du message
+date=concat([DataFrame(y,columns=['year']),
+             DataFrame(m,columns=['month']),
+             DataFrame(d,columns=['day']),
+             DataFrame(lg,columns=['lg'])],axis=1)
+#%%
+# Construction de la matrice TFIDF avec la librairy TfidfVectorizer
+tfidf_v = TfidfVectorizer(max_df=0.95, min_df=2, max_features=100000,ngram_range=(1,3),
+stop_words=stopwords.words('english'))
+tfidf = tfidf_v.fit_transform(content_clean).toarray()
+
+#%%
+# Conversion des matrices en DataFrame pour pouvoir appliquer dans la suite une méthode de prédiction
+binardesti=DataFrame(binardesti , columns=textdestidistinct.keys())
+binarexp=DataFrame(binarexp , columns=textexpdistinct.keys())
+tfidf=DataFrame(tfidf,columns=tfidf_v.get_feature_names())
+
+#%%
+# Concatenation de l'ensemble des matrices
+mat = concat([tfidf,date,binarexp], axis=1)
+#%%
+# Matrice d'entrainement correspondant exactement aux 6972 premiers elements
+train_mat=mat[0:6972]
+#%%
+#Matrice de test correspondant 2000 derniers elements
+test_mat=mat[6972:]
+#%%
+# les 6972 destinataires sur lesquels la methode doit faire son apprentissage afin de prédire les destinataires dans test
+Ytrain=don['desti'][0:6972]
+#%%
+# Methode utilisée : Random Forest Classifier
+"""
+    Dans cette partie j'ai du utiliser SVM et Random Forest
+    J'ai conservé Random Forest par le simple fait que le taux de bonne prédiction obtenu est meilleur (Sous Kaggle)
+"""
+clf = RandomForestClassifier(n_jobs=-1,max_features= 'sqrt' ,n_estimators=200, oob_score = True)
+clf.fit(train_mat, Ytrain)
+pred=DataFrame(clf.predict_proba(test_mat), columns=clf.classes_)
+#%%
+# Sélection des 10 premiers par ordre décroissant de probabilités
+def Class_predict(pred):
+    pred2 = []
+    for i in range(len(pred)):
+        tab = pred.iloc[i].sort_values(ascending = False)
+        pred2.append(tab.iloc[0:10].index.tolist())
+    return pred2
+soumit=Class_predict(pred)
+
+# Formatage des données sous le format de soumission recommandé
+soumit1=[]
+
+for i in range(len(soumit)):
+    s=''
+    for j in range(10):
+        s=s+' '+soumit[i][j]
+    soumit1.append(s)
+
+id_to_pred=[]
+for id in (test_info_sid['id']):
+    id_to_pred.append(id)
+fic=list()
+fic.append(['Id','Recipients'])
+for i in range(len(id_to_pred)):
+    fic.append([id_to_pred[i],soumit1[i]])
+
+DataFrame(fic).to_csv('/home/formationsid/Documents/Data_Mining/Submit_Kaggle_Project.csv', index=False, header=0)
