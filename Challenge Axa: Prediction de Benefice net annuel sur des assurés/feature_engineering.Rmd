@@ -1,0 +1,209 @@
+---
+Author: GAHN Alioune Badara Ba
+title: "Feature Engineering Axa's Challenge"
+output: html_notebook
+---
+
+Lecture du dataset en ayant au préalable remplacé les Nans avec la méthode des plus proches voisins.
+```{r}
+train <- read.table("/home/sid2018-1/Bureau/challenge Axa/train_imputed.csv", sep =',',header=TRUE)
+```
+
+Nous précisons à R quelles sont nos variables catégorielles
+```{r}
+train$le_csp=as.factor(train$le_csp)
+train$le_marque=as.factor(train$le_marque)
+train$le_type_vehicule=as.factor(train$le_type_vehicule)
+train$age_label=as.factor(train$age_label)
+```
+
+
+```{r}
+attach(train)
+```
+
+Quelques stats descriptives sur nos données
+```{r}
+summary(train)
+```
+Certaines valeurs nous semblent abbérantes. On a donc potentiellement des anomalies dans le train set.
+
+Analyse descriptive sur les variables qualitatives: Appliquons le bénéfice moyen par niveau de nos variables factorielles. Nous observons un dénivellement important. Certaines variables semblent influer sur le benefice
+```{r}
+tapply(Benefice.net.annuel, le_csp, mean) # Le niveau 1 est significatif
+tapply(Benefice.net.annuel, le_marque, mean) # La variable ne semble pas influer sur le benefice
+tapply(Benefice.net.annuel, le_type_vehicule, mean) # La variable semble tres significative
+tapply(Benefice.net.annuel, age_label, mean) # La variable semble aussi significative
+```
+Selon la sortie precedente, le range entre les moyennes des bénéfices par categorie d'age est environ égale à 31. Ceci predit un effet significatif de cette variable sur le bénéfice net annuel.
+
+Observosn ces graphiques avec des boxplots
+
+```{r}
+par(mfrow=c(3,2))
+boxplot(Benefice.net.annuel~le_csp, ylab="Bénéfice", xlab="categorie socio professionnelle")
+boxplot(Benefice.net.annuel~le_marque, ylab="Bénéfice", xlab="marque")
+boxplot(Benefice.net.annuel~le_type_vehicule, ylab="Bénéfice", xlab="type vehicule")
+boxplot(Benefice.net.annuel~age_label, ylab="Bénéfice", xlab="tranche d'age")
+layout(1) #
+```
+
+Nous voyons ici que le type vehicule ainsi que la tranche d'age semble effectivement avoir un effet significatif sur le bénéfice net annuel. 
+
+Faisons maintenant un anova pour chaque variable qualitative pour vérifier nos hypothèses:
+```{r}
+lm.csp = lm(Benefice.net.annuel~le_csp) 
+anova(lm.csp) # donne la meme sortie que summary(aov)
+```
+On note une p-value de 0.007 <0.05 donc on rejette l'hypothese nulle. Les données nous permettent donc ici de conclure une corrélation entre la catégorie socio professionnelle et le Bénéfice net annuel. 
+
+```{r}
+lm.marque = lm(Benefice.net.annuel~le_marque) 
+anova(lm.marque) 
+```
+
+Ici nous obtenons une p-value de 0.67 donc nous acceptons l'hypothese nulle. La marque 
+n'influe donc pas sur le Bénéfice Net annuel
+
+```{r}
+lm.tv = lm(Benefice.net.annuel~le_type_vehicule) 
+anova(lm.tv)
+```
+
+Nous observons une p-value de 2e-16. Ca veut dire que cette variable est tres importante dans notre étude. On a un R2 ajusté de 0.79 donc le modele avec cet unique feature explique 78% du Benefice net annuel. Nous tenons surement l'un des features les plus importants de notre étude. 
+
+```{r}
+lm.al = lm(Benefice.net.annuel~age_label) 
+anova(lm.al)
+```
+Le feature est aussi trop important dans l'explication du bénéfice net annuel. Nous allons donc le garder tout au long de l'étude. 
+
+Testons Maintenant les effets des interactions entre les différentes variables qualitatives:
+```{r}
+# modele d'Anova avec interactions
+lm.all_int = lm(Benefice.net.annuel~le_csp*(le_marque+le_type_vehicule+age_label)+le_marque*(le_type_vehicule+age_label)+le_type_vehicule*age_label) 
+anova(lm.all_int)
+```
+Nous voyons à travers cette sortie que l'interaction type vehicule et age_label est importante pour l'explicabilité du Benefice net annuel avec une p_value < 10e-5. 
+Nous allons donc le prendre en compte. 
+
+Pour conclure cette analyse des variables qualitatives, nous retenons que les features importants sont: le type de vehicule, la categorie socio professionnelle, la variable age_label ainsi que l'interaction type_vehicule age_label. 
+
+Passons maintenant à une analyse des variables Quantitatives:
+
+Ici nous allons tenter la meme approche: étudier d'abord la distribution de chaque variable pour détecter de potentiels outliers,pour ensuite faire une regression pour voir est ce que notre variable explique bien le bénéfice net annuel: 
+```{r}
+boxplot(Age)
+```
+Nous observons grace à ce graphe qu'il ya de potentiels outliers à prendre en compte 
+
+```{r}
+reg.age= lm(Benefice.net.annuel ~ Age)
+anova(reg.age) 
+```
+Avec une p-value <<0.05, nous déduisons qu'il ya un lien entre l'age et le bénéfice net annuel.
+```{r}
+plot(Age,Benefice.net.annuel, main="Relation entre l'age et le Benefice")
+abline(reg.age)
+```
+En visionnant le graphe,il est clair pour nous qu'il faudra une phase de detection d'outliers dans notre case study. 
+
+Analysons maintenant le coefficient bonus malus:
+```{r}
+boxplot(Coefficient.bonus.malus)
+```
+```{r}
+reg.cbm= lm(Benefice.net.annuel ~ Coefficient.bonus.malus)
+anova(reg.cbm)
+```
+Le test d'effet sur le bénéfice de cette variable est aussi significatif. 
+
+Analyse du cout d'entretient annuel:
+```{r}
+boxplot(Cout.entretien.annuel)
+```
+
+
+```{r}
+reg.cea= lm(Benefice.net.annuel ~ Cout.entretien.annuel)
+anova(reg.cea)
+```
+Ici par exemple, nous avons une p-value>>0.05. L'hypothese Ho du test de nullité du coefficient associé au cout d'entretien annuel est donc accceptée. Nous en concluons que cette variable n'a pas d'effet sur le Bénéfice net annuel. 
+
+Le code suivant permet de faire cette même étude pour toutes les autres variables quantitatives.
+
+```{r}
+boxplot(Kilometres.parcourus.par.mois)
+reg.kpm= lm(Benefice.net.annuel ~ Kilometres.parcourus.par.mois)
+summary(reg.kpm)
+boxplot(Niveau.de.vie)
+reg.ndv= lm(Benefice.net.annuel ~ Niveau.de.vie)
+summary(reg.ndv)
+boxplot((Prime.mensuelle))
+reg.pm= lm(Benefice.net.annuel ~ Prime.mensuelle)
+summary(reg.pm)
+boxplot(Salaire.annuel)
+reg.sa= lm(Benefice.net.annuel ~ Salaire.annuel)
+summary(reg.sa)
+boxplot(Score.CRM)
+reg.crm= lm(Benefice.net.annuel ~ Score.CRM)
+summary(reg.crm)
+boxplot(Score.credit)
+reg.sc= lm(Benefice.net.annuel ~ Score.credit)
+summary(reg.sc)
+```
+
+Construisons un modele de regression en considèrant toutes les variables quantitatives pour avoir une baseline pour la feature selection
+```{r}
+reg_all_q = lm(Benefice.net.annuel ~ Age+Coefficient.bonus.malus+Kilometres.parcourus.par.mois+Prime.mensuelle+Score.CRM+Cout.entretien.annuel+Niveau.de.vie+Salaire.annuel+Score.credit)
+anova(reg_all_q) 
+```
+La  sortie nous montre que L'age, le score crm et le niveua de vie sont les plus importantes car ceux sont celles qui sont associées aux plus petites p-values
+
+Faisons maintenant un feature selection par la méthode descendante sur ce modèle:
+```{r}
+regback = step(reg_all_q, direction = c("backward")) # descendant
+anova(regback)
+```
+Lorsque nous mettons tous les features ensemble, nous voyons que le score CRM, le salaire Annuel Le nombre de Kms parcourus ainsi que le Coefficient Bonus Malus sont les variables quantitatives qui expliquent le mieux le Benefice en minimisant le critère d'AIC (passage de 5861 à 5854). 
+
+ Reessayons maintenant mais en ne gardant que les features qui nous semblaient cohérents aprés avoir fait les tests individuellement:
+```{r}
+reg_all_qe = lm(Benefice.net.annuel ~ Age+Coefficient.bonus.malus+Kilometres.parcourus.par.mois+Score.CRM+Niveau.de.vie+Salaire.annuel)
+regbacke = step(reg_all_qe, direction = c("backward")) # descendant
+anova(regbacke)
+```
+Ceci confirme notre hypothese donc nous allons nous concentrer sur ces features dans la construction de notre modèle.
+
+Maintenant, nous fusionnons les features retenus dans chacune des phases d'études des différents types de variables (quantitatives et qualitatives) afin de construire un modèle final.
+Nous retiendrons comme features principales celles qu'on aura aprés une étape de feature selection avec la méthode descendante:
+```{r}
+lm_all = lm(Benefice.net.annuel ~Coefficient.bonus.malus+Kilometres.parcourus.par.mois+Score.CRM+Salaire.annuel+le_type_vehicule+le_csp+age_label+age_label*le_type_vehicule)
+anova(lm_all)
+```
+
+Nous voyons ici que toutes nos variables sont importantes pour expliquer le benefice net annuel.
+Regardons maintenant à quel point nos variables expliquent le benefice.
+
+```{r}
+summary(lm_all)
+```
+Nous obtenons un R2-ajusté de 0.8873, ce qui veut dire que notre modèle explique à environ 90% le Benefice net annuel. Ce qui est assez solide.
+
+Faisons une automatique feature selection avec les variables qualitatives et quantitatives pour ne garder que celles qui minimisent notre AIC: 
+```{r}
+regback_all = step(lm_all, direction = c("backward")) # descendant
+anova(regback_all)
+```
+
+Nous concluons que les six (06) features qui expliquent le mieux le Benefice net annuel sont:
+
+              - Le nombre de Kms parcourus
+              - Le score CRM
+              - Le Salaire annuel 
+              - le Type vehicule
+              - La catégorie Socio professionnelle
+              - La variable age_label qui classent les ages des beneficiares par intervalles. 
+
+C'est donc de ces variables dont nous allons nous servir dans la suite de l'Etude afin de construire notre modèle prédictif. 
+
