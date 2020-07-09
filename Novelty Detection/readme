@@ -1,0 +1,7 @@
+
+Le contexte de ce projet est de détecter des anomalies sur des séquences d'enregistrements issus de capteurs d'helicoptères d'Airbus.
+
+Chaque observation de notre data représente donc un enregistrement d'une seconde de signaux sous une fréquence de 1200 Hz. 
+
+Notre bas d'entrainement ne contenait que des signaux normaux. Et il fallait à partir de ces observations, apprendre le comportement d'un signal normal afin de calculer 
+plusieurs features permettant de discerner les anomalies. 
