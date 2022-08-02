@@ -1,6 +1,6 @@
 In this Repository you can find some machine learning projects i've worked on. 
 ## Challenge Axa
-Ce projet a été alié dan le cadre d'un chalenge avec le groupe Axa avec des données fictives sur des assurés en IARD. 
+Ce projet a été réalisé dan le cadre d'un chalenge avec le groupe Axa avec des données fictives sur des assurés en IARD. 
 L'objectif etant de prédire le bénéfice net annuel qui sera réalisé pour un assuré donné en se servant de plusieurs variables.
 
 ## Challenge Airbus: Detection d'anomalies
